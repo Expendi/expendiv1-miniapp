@@ -11,6 +11,8 @@
   "dependencies": {
     "@apollo/client": "^3.13.8",
     "@apollo/client-integration-nextjs": "^0.12.2",
+    "@farcaster/frame-sdk": "^0.1.8",
+    "@farcaster/miniapp-sdk": "^0.1.8",
     "@fullcalendar/core": "^6.1.15",
     "@fullcalendar/daygrid": "^6.1.15",
     "@fullcalendar/interaction": "^6.1.15",

@@ -6,6 +6,7 @@ import { WagmiProvider } from '@privy-io/wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { config } from './wagmi-config';
 import { privyConfig } from './config';
+import { farcasterPrivyConfig, isFarcasterMiniApp } from '../farcaster/config';
 import { useEffect } from 'react';
 import { setupConsoleFilters } from '../utils/console-filter';
 import { PrivyErrorBoundary, DefaultPrivyFallback } from './ErrorBoundary';
@@ -21,6 +22,10 @@ export function Providers({ children }: ProvidersProps) {
   useEffect(() => {
     setupConsoleFilters();
   }, []);
+
+  // Determine if we're in a Farcaster miniapp context
+  const isFarcasterContext = isFarcasterMiniApp();
+  const selectedConfig = isFarcasterContext ? farcasterPrivyConfig : privyConfig;
 
   // Check if Privy app ID is configured
   const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
@@ -52,7 +57,7 @@ export function Providers({ children }: ProvidersProps) {
     <PrivyErrorBoundary fallback={DefaultPrivyFallback}>
       <PrivyProvider
         appId={privyAppId}
-        config={privyConfig}
+        config={selectedConfig}
       >
         <QueryClientProvider client={queryClient}>
           <WagmiProvider config={config} reconnectOnMount={false}>

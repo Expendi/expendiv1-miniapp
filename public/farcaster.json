@@ -1,0 +1,12 @@
+{
+  "name": "Expendi - Budget Wallet Manager",
+  "version": "1.0.0",
+  "description": "Manage your budget wallets and track expenses with Web3 technology. Create spending categories, monitor transactions, and maintain financial control through Farcaster.",
+  "homeUrl": "https://expendi.app/miniapp",
+  "imageUrl": "https://expendi.app/images/logo/logo.svg",
+  "buttonTitle": "Open Expendi",
+  "splashImageUrl": "https://expendi.app/images/logo/logo.svg",
+  "splashBackgroundColor": "#8a63d2",
+  "webhookUrl": "https://expendi.app/api/farcaster/webhook",
+  "domain": "expendi.app"
+}

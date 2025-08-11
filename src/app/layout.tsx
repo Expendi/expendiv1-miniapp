@@ -7,6 +7,7 @@ import { TourProvider } from '@/context/TourContext';
 import { Providers } from '@/lib/privy/providers';
 import { Metadata } from 'next';
 import { SmartAccountProvider } from '@/context/SmartAccountContext';
+import { FarcasterProvider } from '@/context/FarcasterContext';
 import { Toaster } from "@/components/ui/sonner"
 import { ApolloWrapper } from '@/lib/services/apollo-wrapper';
 import { AppTour } from '@/components/tour/AppTour';
@@ -60,19 +61,21 @@ export default async function RootLayout({
         <Providers>
           <PostHogProvider>
             <ThemeProvider>
-              <SmartAccountProvider>
-                <SidebarProvider>
-                  <TourProvider>
-                    <AppTour>
-                      <ApolloWrapper delay={delay}>
-                        {children}
-                        <PWAInstaller />
-                      </ApolloWrapper>
-                    </AppTour>
-                  </TourProvider>
-                  <Toaster position="top-right" richColors />
-                </SidebarProvider>
-              </SmartAccountProvider>
+              <FarcasterProvider>
+                <SmartAccountProvider>
+                  <SidebarProvider>
+                    <TourProvider>
+                      <AppTour>
+                        <ApolloWrapper delay={delay}>
+                          {children}
+                          <PWAInstaller />
+                        </ApolloWrapper>
+                      </AppTour>
+                    </TourProvider>
+                    <Toaster position="top-right" richColors />
+                  </SidebarProvider>
+                </SmartAccountProvider>
+              </FarcasterProvider>
             </ThemeProvider>
           </PostHogProvider>
         </Providers>
