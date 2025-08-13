@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { formatUnits } from "viem";
-import { useAccount } from "wagmi";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { useUserBudgetWallet } from "@/hooks/subgraph-queries/useUserBudgetWallet";
 import { useUserBuckets } from "@/hooks/subgraph-queries/getUserBuckets";
 import { useSmartAccount } from "@/context/SmartAccountContext";
@@ -23,6 +23,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useExchangeRate } from "@/hooks/useExchangeRate";
 import { useDebouncedValidation } from "@/hooks/useDebouncedValidation";
 import { useBucketPayment } from "@/hooks/useBucketPayment";
+import { useBasenamePayment } from "@/hooks/useBasenamePayment";
+import { useRecipientValidation } from "@/hooks/useBasenamePayment";
+import { isValidBasename, normalizeBasename } from "@/lib/apis/basenames";
 
 interface TokenBalance {
   id: string;
@@ -51,7 +54,12 @@ interface UserBucket {
 
 export function QuickSpendBucket({ bucket }: { bucket: UserBucket[] }) {
 
-  const { address } = useAccount();
+  const { ready, authenticated, user } = usePrivy();
+  const { wallets } = useWallets();
+  
+  // Get the embedded wallet from Privy
+  const embeddedWallet = wallets.find(wallet => wallet.walletClientType === 'privy');
+  const address = embeddedWallet?.address;
   const [amount, setAmount] = useState('');
   const [recipient, setRecipient] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -76,6 +84,8 @@ export function QuickSpendBucket({ bucket }: { bucket: UserBucket[] }) {
 
   // Use TanStack Query for bucket payments
   const bucketPayment = useBucketPayment();
+  const basenamePayment = useBasenamePayment();
+  const recipientValidation = useRecipientValidation();
 
   const { smartAccountClient, smartAccountAddress, smartAccountReady } = useSmartAccount();
 
@@ -132,28 +142,60 @@ export function QuickSpendBucket({ bucket }: { bucket: UserBucket[] }) {
       return;
     }
 
-    // Use the bucket payment mutation
+    // Validate recipient
+    const validation = recipientValidation.validateRecipient(recipient);
+    if (!validation.isValid) {
+      toast.error('Please enter a valid recipient address or Base ENS name');
+      return;
+    }
+
+    // Use the appropriate payment mutation based on recipient type
     try {
-      // Convert entered KES to USDC for on-chain spending and validations
-      const amountUsdc = exchangeRate ? (parseFloat(amount) / exchangeRate).toFixed(2) : amount;
+          // Convert amount based on recipient mode
+    let amountUsdc: string;
+    if (recipientMode === 'phone') {
+      // For phone payments, convert KES to USDC
+      amountUsdc = exchangeRate ? (parseFloat(amount) / exchangeRate).toFixed(2) : amount;
+    } else {
+      // For address/ENS payments, amount is already in USDC
+      amountUsdc = amount;
+    }
 
-      const result = await bucketPayment.mutateAsync({
-        smartAccountClient,
-        walletAddress: walletData.user.walletsCreated[0].wallet as `0x${string}`,
-        userAddress: queryAddress as `0x${string}`,
-        bucketName: selectedBucketName,
-        amount: amountUsdc,
-        recipient,
-        phoneNumber,
-        paymentType,
-        mobileNetwork,
-        availableBalance: usdcBalance,
-        currentSpent,
-        monthlyLimit,
-        exchangeRate,
-      });
+      if (validation.type === 'basename' || validation.type === 'address') {
+        // Use Base ENS payment for addresses and Base ENS names
+        const result = await basenamePayment.mutateAsync({
+          smartAccountClient,
+          walletAddress: walletData.user.walletsCreated[0].wallet as `0x${string}`,
+          userAddress: queryAddress as `0x${string}`,
+          bucketName: selectedBucketName,
+          amount: amountUsdc,
+          recipient,
+          availableBalance: usdcBalance,
+          currentSpent,
+          monthlyLimit,
+        });
 
-      console.log('Bucket spend transaction hash:', result.txHash);
+        console.log('Base ENS payment transaction hash:', result.txHash);
+      } else {
+        // Use regular bucket payment for phone numbers
+        const result = await bucketPayment.mutateAsync({
+          smartAccountClient,
+          walletAddress: walletData.user.walletsCreated[0].wallet as `0x${string}`,
+          userAddress: queryAddress as `0x${string}`,
+          bucketName: selectedBucketName,
+          amount: amountUsdc,
+          recipient,
+          phoneNumber,
+          paymentType,
+          mobileNetwork,
+          availableBalance: usdcBalance,
+          currentSpent,
+          monthlyLimit,
+          exchangeRate,
+        });
+
+        console.log('Bucket spend transaction hash:', result.txHash);
+      }
 
       // Reset form
       setAmount('');
@@ -169,7 +211,7 @@ export function QuickSpendBucket({ bucket }: { bucket: UserBucket[] }) {
 
     } catch (error) {
       // Error handling is done in the mutation hooks
-      console.error('Bucket payment error:', error);
+      console.error('Payment error:', error);
     }
   };
 
@@ -194,13 +236,18 @@ export function QuickSpendBucket({ bucket }: { bucket: UserBucket[] }) {
   const monthlyLimitFormatted = formatUnits(BigInt(monthlyLimit), 6);
   const remainingBudget = Math.max(0, parseFloat(monthlyLimitFormatted) - parseFloat(currentSpentFormatted));
 
-  // New: amount is entered in KES. Compute USDC equivalent and KES maximums for UI/validation
-  const usdcEquivalent = amount && exchangeRate ? (parseFloat(amount) / exchangeRate).toFixed(2) : null;
+  // Compute currency-specific values based on recipient mode
   const maxUsdc = Math.min(parseFloat(availableBalance), remainingBudget);
+  
+  // For phone payments: amount is in KES, show KES max and USDC equivalent
   const maxKesNumber = exchangeRate ? maxUsdc * exchangeRate : undefined;
   const maxKesLabel = typeof maxKesNumber === 'number' && isFinite(maxKesNumber)
     ? maxKesNumber.toFixed(2)
     : '—';
+  const kesEquivalent = recipientMode === 'phone' && amount && exchangeRate ? (parseFloat(amount) / exchangeRate).toFixed(2) : null;
+  
+  // For address payments: amount is in USDC, show USDC max and KES equivalent
+  const usdcEquivalent = recipientMode === 'address' && amount && exchangeRate ? (parseFloat(amount) * exchangeRate).toFixed(2) : null;
 
   return (
     <Card>
@@ -242,7 +289,7 @@ export function QuickSpendBucket({ bucket }: { bucket: UserBucket[] }) {
             <Label className="pb-2">Recipient</Label>
             <Tabs value={recipientMode} onValueChange={(v) => setRecipientMode(v as 'address' | 'phone')} className="w-full">
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="address">Wallet Address</TabsTrigger>
+                <TabsTrigger value="address" className="px-4 text-xs">Wallet Address / Base ENS</TabsTrigger>
                 <TabsTrigger value="phone">Phone Number</TabsTrigger>
               </TabsList>
               <TabsContent value="address" className="space-y-2">
@@ -250,11 +297,14 @@ export function QuickSpendBucket({ bucket }: { bucket: UserBucket[] }) {
                   id="recipient"
                   value={recipient}
                   onChange={(e) => setRecipient(e.target.value)}
-                  placeholder="0x..."
+                  placeholder={recipientValidation.getRecipientPlaceholder()}
+                  className={recipientValidation.validateRecipient(recipient).isValid ? 'border-green-500' : recipientValidation.validateRecipient(recipient).type === 'invalid' && recipient ? 'border-red-500' : ''}
                 />
-                <div className="text-sm text-muted-foreground">
-                  Enter the wallet address to send USDC to
-                </div>
+                {recipient && (
+                  <div className={`text-sm ${recipientValidation.validateRecipient(recipient).isValid ? 'text-green-600' : 'text-red-600'}`}>
+                    {recipientValidation.getRecipientHelperText(recipient)}
+                  </div>
+                )}
               </TabsContent>
               <TabsContent value="phone" className="space-y-4">
                 <div className="flex justify-between items-center pt-4">
@@ -313,10 +363,10 @@ export function QuickSpendBucket({ bucket }: { bucket: UserBucket[] }) {
                         <span className="text-blue-900 font-medium">{parseFloat(amount).toFixed(2)} KES</span>
                       </div>
                     )}
-                    {usdcEquivalent && (
+                    {kesEquivalent && (
                       <div className="flex justify-between items-center text-sm mt-1">
                         <span className="text-blue-700">USDC equivalent:</span>
-                        <span className="text-blue-900 font-medium">{usdcEquivalent} USDC</span>
+                        <span className="text-blue-900 font-medium">{kesEquivalent} USDC</span>
                       </div>
                     )}
                   </div>
@@ -358,23 +408,30 @@ export function QuickSpendBucket({ bucket }: { bucket: UserBucket[] }) {
           
           {selectedBucket && (
             <div>
-              <Label htmlFor="amount" className="pb-2">Amount (KES)</Label>
+              <Label htmlFor="amount" className="pb-2">
+                Amount ({recipientMode === 'address' ? 'USDC' : 'KES'})
+              </Label>
               <Input
                 id="amount"
                 type="number"
                 step="0.01"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                placeholder="1000.00"
-                max={maxKesNumber}
+                placeholder={recipientMode === 'address' ? '10.00' : '1000.00'}
+                max={recipientMode === 'address' ? maxUsdc : maxKesNumber}
                 required
               />
               <div className="text-sm text-muted-foreground mt-1">
-                Maximum: {maxKesLabel} KES
+                Maximum: {recipientMode === 'address' ? `${maxUsdc.toFixed(2)} USDC` : `${maxKesLabel} KES`}
               </div>
-              {usdcEquivalent && (
+              {recipientMode === 'address' && usdcEquivalent && (
                 <div className="text-sm text-muted-foreground mt-1">
-                  Equivalent: {usdcEquivalent} USDC
+                  Equivalent: {usdcEquivalent} KES
+                </div>
+              )}
+              {recipientMode === 'phone' && kesEquivalent && (
+                <div className="text-sm text-muted-foreground mt-1">
+                  Equivalent: {kesEquivalent} USDC
                 </div>
               )}
             </div>
@@ -383,7 +440,7 @@ export function QuickSpendBucket({ bucket }: { bucket: UserBucket[] }) {
           <div className="flex justify-end gap-2">
             <Button 
               type="submit" 
-              disabled={bucketPayment.isProcessing || !amount || (!recipient && !phoneNumber) || !selectedBucketName || !exchangeRate} 
+              disabled={bucketPayment.isProcessing || !amount || (!recipient && !phoneNumber) || !selectedBucketName || (recipientMode === 'phone' && !exchangeRate)} 
               variant="primary"
             >
               {bucketPayment.isProcessing ? 'Processing...' : recipientMode === 'phone' ? 'Send KES' : 'Send USDC'}

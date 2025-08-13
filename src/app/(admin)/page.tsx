@@ -12,6 +12,7 @@ import { BucketsGrid } from "@/components/buckets/BucketsGrid";
 import QuickSpendTab from "@/components/buckets/QuickSpendTab";
 import { useSmartAccount } from "@/context/SmartAccountContext";
 import { useUserBuckets } from "@/hooks/subgraph-queries/getUserBuckets";
+// import { BasenameTest } from "@/components/basename/BasenameTest";
 
 
 
@@ -61,8 +62,13 @@ export default function DashboardPage() {
           <h2 className="text-lg font-semibold leading-6 text-gray-900 dark:text-white">Buckets</h2>
         </div>
         <BucketsGrid buckets={buckets} loading={isInitialLoading} error={error || null} />
+        {/* <BasenameTest /> */}
+
       </div>
       
+      {/* <div>
+        <BasenameTest />
+      </div> */}
       {/* TODO: This will be an overview of the budget wallet */}
       {/* <div className="col-span-12 space-y-6 xl:col-span-7">
         <BucketWalletMetrics />
