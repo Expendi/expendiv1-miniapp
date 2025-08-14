@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { initializeFarcasterSDK, isFarcasterSDKReady } from '@/lib/farcaster/sdk';
-import { sdk } from '@farcaster/frame-sdk';
+import { sdk } from '@farcaster/miniapp-sdk';
 
 interface FarcasterContextType {
   sdk: typeof sdk | null;
@@ -40,14 +40,16 @@ export const FarcasterProvider = ({ children }: FarcasterProviderProps) => {
   useEffect(() => {
     const initSDK = async () => {
       try {
-        const farcasterSDK = initializeFarcasterSDK();
+        const farcasterSDK = await initializeFarcasterSDK();
         setSdkInstance(farcasterSDK);
 
         // Wait for SDK to be ready
-        const checkReady = () => {
-          if (isFarcasterSDKReady(farcasterSDK)) {
+        const checkReady = async () => {
+          const ready = await isFarcasterSDKReady(farcasterSDK);
+          if (ready) {
             setIsReady(true);
-            setContext(farcasterSDK.context);
+            const context = await farcasterSDK.context;
+            setContext(context);
             setError(null);
           } else {
             // Keep checking until ready

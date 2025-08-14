@@ -1,22 +1,35 @@
 'use client';
 
-import { sdk } from '@farcaster/frame-sdk';
+import { sdk } from '@farcaster/miniapp-sdk';
 
-// Initialize the SDK - use the default export from frame-sdk
-export const initializeFarcasterSDK = () => {
+// Initialize the SDK and call ready when ready
+export const initializeFarcasterSDK = async () => {
+  // Wait for SDK to be ready, then call ready
+  await sdk.actions.ready();
   return sdk;
 };
 
 // Utility function to check if SDK is ready
-export const isFarcasterSDKReady = (farcasterSDK: typeof sdk): boolean => {
-  return farcasterSDK.context !== null && farcasterSDK.context !== undefined;
+export const isFarcasterSDKReady = async (farcasterSDK: typeof sdk): Promise<boolean> => {
+  try {
+    const context = await farcasterSDK.context;
+    return context !== null && context !== undefined;
+  } catch {
+    return false;
+  }
 };
 
 // Get user's Farcaster profile from SDK context
-export const getFarcasterProfile = (farcasterSDK: typeof sdk) => {
-  if (!isFarcasterSDKReady(farcasterSDK)) return null;
+export const getFarcasterProfile = async (farcasterSDK: typeof sdk) => {
+  const isReady = await isFarcasterSDKReady(farcasterSDK);
+  if (!isReady) return null;
   
-  return farcasterSDK.context?.user || null;
+  try {
+    const context = await farcasterSDK.context;
+    return context?.user || null;
+  } catch {
+    return null;
+  }
 };
 
 // Utility to share content to Farcaster
@@ -24,16 +37,18 @@ export const shareToFarcaster = async (farcasterSDK: typeof sdk, content: {
   text: string;
   embeds?: string[];
 }) => {
-  if (!isFarcasterSDKReady(farcasterSDK)) {
+  const isReady = await isFarcasterSDKReady(farcasterSDK);
+  if (!isReady) {
     console.warn('Farcaster SDK not ready for sharing');
     return;
   }
   
   try {
     // Use SDK's compose cast action
+    const embeds = content.embeds ? content.embeds.slice(0, 2) as [] | [string] | [string, string] : undefined;
     await farcasterSDK.actions.composeCast({
       text: content.text,
-      embeds: content.embeds || []
+      embeds
     });
   } catch (error) {
     console.error('Failed to share to Farcaster:', error);
