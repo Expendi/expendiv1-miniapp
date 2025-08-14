@@ -13,13 +13,13 @@ import {
 } from '../../hooks/useBasenamePayment';
 import { isValidBasename, normalizeBasename } from '../../lib/apis/basenames';
 import { Button } from '../ui/button';
-import { Input } from '../form/input/InputField';
-import { Label } from '../form/Label';
+import Input from '../form/input/InputField';
+import Label from '../form/Label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
-import { useSmartAccountContext } from '../../context/SmartAccountContext';
+import { useSmartAccount } from '../../context/SmartAccountContext';
 import { useWalletUser } from '../../hooks/useWalletUser';
 
 interface BasenamePaymentFormProps {
@@ -39,13 +39,13 @@ export function BasenamePaymentForm({
 }: BasenamePaymentFormProps) {
   const { ready, authenticated, user } = usePrivy();
   const { wallets } = useWallets();
-  const { smartAccountClient } = useSmartAccountContext();
+  const { smartAccountClient } = useSmartAccount();
   
   // Get the embedded wallet from Privy
   const embeddedWallet = wallets.find(wallet => wallet.walletClientType === 'privy');
   const address = embeddedWallet?.address;
   
-  const { data: walletData } = useWalletUser();
+  const walletData = useWalletUser();
   
   const [amount, setAmount] = useState('');
   const [recipient, setRecipient] = useState('');
@@ -219,7 +219,7 @@ export function BasenamePaymentForm({
             <select
               id="bucket"
               value={selectedBucket}
-              onChange={(e) => setSelectedBucket(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedBucket(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
             >
@@ -238,12 +238,11 @@ export function BasenamePaymentForm({
             <Input
               id="amount"
               type="number"
-              step="0.01"
+              step={0.01}
               min="0"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              defaultValue={amount}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)}
               placeholder="0.00"
-              required
             />
             <p className="text-sm text-gray-500">
               Available: {availableBalanceFormatted} USDC | 
@@ -257,11 +256,10 @@ export function BasenamePaymentForm({
             <Input
               id="recipient"
               type="text"
-              value={recipient}
-              onChange={(e) => setRecipient(e.target.value)}
+              defaultValue={recipient}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRecipient(e.target.value)}
               placeholder={recipientValidation.getRecipientPlaceholder()}
               className={validation.isValid ? 'border-green-500' : validation.type === 'invalid' && recipient ? 'border-red-500' : ''}
-              required
             />
             <p className={`text-sm ${validation.isValid ? 'text-green-600' : 'text-red-600'}`}>
               {recipientValidation.getRecipientHelperText(recipient)}
